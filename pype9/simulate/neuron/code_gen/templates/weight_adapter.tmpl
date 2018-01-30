@@ -1,0 +1,129 @@
+TITLE Weight adjuster mechanism generated from 9ML using PyPe9 version {{version}} at '{{timestamp}}'
+
+
+NEURON {
+	POINT_PROCESS {{component_name}}
+    : StateVariables:
+{% for sv in component_class.state_variables %}
+    {% if sv.name not in component_class.analog_send_port_names %}
+    RANGE {{sv.name}}
+    {% endif %}
+{% endfor %}
+    : Parameters
+{% for p in component_class.parameters %}
+    RANGE {{p.name}}
+{% endfor %}
+    : Aliases
+{% for alias in component_class.aliases %}
+    RANGE {{alias.name}}
+{% endfor %}
+    : Analog send ports
+{% for asp in component_class.analog_send_ports %}
+	POINTER {{asp.name}}
+{% endfor %}
+}
+
+UNITS {
+    : Define symbols for base units
+    (mV) = (millivolt)
+    (nA) = (nanoamp)
+    (nF) = (nanofarad)
+    (uF) = (microfarad)
+    (S)  = (siemens)
+    (uS) = (microsiemens)
+    (mM) = (milli/liter)
+    (um) = (micrometer)
+}
+
+CONSTANT {
+    : IDs for regimes, events and conditions 
+
+    : Transition flags
+    INIT = -1    
+    ON_EVENT = 0
+
+    : Regime ids
+{% for regime in component_class.regimes %}
+    {{regime.name | upper}} = {{component_class.index_of(regime)}}
+{% endfor %}
+
+    : Event port ids
+{% for port in component_class.event_receive_ports %}
+    {{port.name | upper}} = {{component_class.index_of(port)}}
+{% endfor %}
+
+}
+
+PARAMETER {
+    : True parameters
+{% for param, units in unit_handler.assign_units_to_variables(component_class.parameters) %}
+    {{param.name}} = 0 ({{units}})
+{% endfor %}
+
+    : Constants
+{% for const, value, units in unit_handler.assign_units_to_constants(component_class.constants) %}
+    {{const.name}} = {{value}} ({{units}})
+{% endfor %}
+
+    : Units for connection properties
+
+    : Unit correction for 't' used in printf in order to get modlunit to work.
+    PER_MS = 1 (/ms)
+}
+
+ASSIGNED {
+    : Internal flags
+    {{regime_varname}}
+    found_transition_
+    
+    : Analog receive ports
+{% for port, units in unit_handler.assign_units_to_variables(chain(component_class.analog_receive_ports, component_class.analog_reduce_ports)) %}
+    {{port.name}} ({{units}}) 
+{% endfor %}
+
+    : Aliases
+{% for alias, units in unit_handler.assign_units_to_aliases(component_class.aliases) %}
+    {{alias.name}} ({{units}})
+{% endfor %}
+
+    : State variables without explicit derivatives
+{% for sv, units in unit_handler.assign_units_to_variables(component_class.state_variables) if len(list(component_class.all_time_derivatives(state_variable=sv))) == 0 %}
+    {{sv.name}} ({{units}})
+{% endfor %}
+
+    :Connection Parameters
+}
+
+NET_RECEIVE(connection_weight_, channel) {
+    INITIAL {
+      : stop channel being set to 0 by default
+    }
+    found_transition_ = -1
+{% for regime in component_class.regimes %}
+    {% for trans in regime.transitions %}
+        {% if hasattr(trans, 'trigger') %}
+    if (flag == {{all_triggers.index(trans.trigger.rhs) + 1}}) {  : Condition '{{trans.trigger.rhs_str}}'
+        {% else %}
+    if (flag == ON_EVENT && channel == {{trans.src_port_name | upper}}) {
+        : Required aliases
+            {% for elem, scaled_expr, _ in unit_handler.scale_aliases(component_class.required_for(trans.state_assignments).expressions) %}
+        {{code_gen.assign_str(elem.lhs, scaled_expr.rhs)}}
+            {% endfor %}
+
+        : State assignments
+            {% for sa, scaled_expr, _ in unit_handler.scale_aliases(trans.state_assignments) %}
+        {{code_gen.assign_str(sa.lhs, scaled_expr.rhs)}}
+            {% endfor %}
+        
+        : Regime transition
+        if (found_transition_ == -1) {
+            found_transition_ = flag
+        } else {
+            printf("WARNING!! Found multiple transitions %f and %f at time %f", found_transition_, flag, t * PER_MS)
+        }
+        {{regime_varname}} = {{trans.target_regime.name | upper}}
+        {% endif %}
+    }    
+	{% endfor %}
+{% endfor %}    
+}
