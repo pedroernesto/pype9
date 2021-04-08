@@ -780,7 +780,7 @@ void {{component_name}}::update(nest::Time const & origin, const long from, cons
  *****************/
 
 void {{component_name}}::handle(nest::SpikeEvent & e) {
-    assert(e.get_delay() > 0);
+    assert(e.get_delay_steps() > 0);
 
     // Get buffer for event receive port
     nest::ListRingBuffer* event_buffer;
@@ -804,7 +804,7 @@ void {{component_name}}::handle(nest::SpikeEvent & e) {
 }
 
 void {{component_name}}::handle(nest::CurrentEvent& e) {
-    assert(e.get_delay() > 0);
+    assert(e.get_delay_steps() > 0);
 
     //Get buffer for current receive port
     nest::RingBuffer* current_buffer;
