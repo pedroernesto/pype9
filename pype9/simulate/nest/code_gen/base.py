@@ -97,9 +97,10 @@ class CodeGenerator(BaseCodeGenerator):
         self.render_to_file('header.tmpl', tmpl_args,
                              name + '.h', src_dir, switches=switches)
         # Render C++ class file
-        self.render_to_file('main.tmpl', tmpl_args, name + '.cpp',
+        self.render_to_file('main_stdp.tmpl', tmpl_args, name + '.cpp',
                              src_dir, switches=switches,
                              post_hoc_subs=self._inline_random_implementations)
+
         # Render Loader header file
         self.render_to_file('module-header.tmpl', tmpl_args,
                              name + 'Module.h', src_dir)
@@ -234,7 +235,8 @@ class CodeGenerator(BaseCodeGenerator):
         return path
 
     def load_libraries(self, name, url, **kwargs):  # @UnusedVariable
-        install_dir = self.get_install_dir(name, url)
+        # install_dir = self.get_install_dir(name, url)
+        install_dir = url
         lib_dir = os.path.join(install_dir, 'lib')
         add_lib_path(lib_dir)
         # Add module install directory to NEST path
