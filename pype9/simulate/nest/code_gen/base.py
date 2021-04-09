@@ -183,8 +183,8 @@ class CodeGenerator(BaseCodeGenerator):
         if path.exists(src_dir):
             remove_ignore_missing(prefix + '.h')
             remove_ignore_missing(prefix + '.cpp')
-            remove_ignore_missing(prefix + 'Module.h')
-            remove_ignore_missing(prefix + 'Module.cpp')
+            remove_ignore_missing(prefix + 'module.h')
+            remove_ignore_missing(prefix + 'module.cpp')
             remove_ignore_missing(
                 path.join(src_dir, 'sli', name + 'module-init.sli'))
         sli_path = path.join(src_dir, 'sli')
