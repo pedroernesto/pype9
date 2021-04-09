@@ -103,13 +103,13 @@ class CodeGenerator(BaseCodeGenerator):
 
         # Render Loader header file
         self.render_to_file('module-header.tmpl', tmpl_args,
-                             name + 'Module.h', src_dir)
+                             name + 'module.h', src_dir)
         # Render Loader C++ class
         self.render_to_file('module-cpp.tmpl', tmpl_args,
-                             name + 'Module.cpp', src_dir)
+                             name + 'module.cpp', src_dir)
         # Render SLI initializer
         self.render_to_file('module_sli_init.tmpl', tmpl_args,
-                             name + 'Module-init.sli',
+                             name + 'module-init.sli',
                              path.join(src_dir, 'sli'))
 
     def configure_build_files(self, name, src_dir, compile_dir, install_dir,
@@ -186,7 +186,7 @@ class CodeGenerator(BaseCodeGenerator):
             remove_ignore_missing(prefix + 'Module.h')
             remove_ignore_missing(prefix + 'Module.cpp')
             remove_ignore_missing(
-                path.join(src_dir, 'sli', name + 'Module-init.sli'))
+                path.join(src_dir, 'sli', name + 'module-init.sli'))
         sli_path = path.join(src_dir, 'sli')
         if not path.exists(sli_path):
             os.makedirs(sli_path)
@@ -243,7 +243,7 @@ class CodeGenerator(BaseCodeGenerator):
         nest.ll_api.sli_run(
             '({}) addpath'.format(os.path.join(install_dir, 'share', 'sli')))
         # Install nest module
-        nest.Install(name + 'Module')
+        nest.Install(name + 'module')
 
     @classmethod
     def get_nest_install_prefix(cls):
