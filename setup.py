@@ -55,7 +55,7 @@ setup(
     install_requires=[
         'nineml>=1.0',
         'ninemlcatalog>=0.1',
-        'sympy>=1.1',
+        'sympy==1.6.2',
         'Jinja2>=2.6',
         'docutils>=0.10',
         'mock>=1.0',
