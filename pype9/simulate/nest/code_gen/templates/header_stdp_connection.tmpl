@@ -63,9 +63,6 @@
          20(23):8812-8821.
          DOI: https://doi.org/10.1523/JNEUROSCI.20-23-08812.2000
   \endverbatim
-
-       First Version of Jinja template: March 2020
-       Author: Pedro Garcia-Rodriguez, ICN, CNRS, France
 */
 
 // C++ includes:
@@ -80,7 +77,6 @@
 // Includes from sli:
 #include "dictdatum.h"
 #include "dictutils.h"
-
 
 namespace nest
 {
@@ -166,12 +162,11 @@ public:
 
 private:
   {% set regime = component_class.regime('sole') %}
-  using std::exp;
   double
   facilitate_( double {{component_class.state_variable('wsyn').name}}, double {{component_class.state_variable('P').name}} )
   {
     {% set on_event = regime.on_event('postsynaptic_spike') %}
-    double {{on_event.state_assignment('deltaw').lhs}} = {{on_event.state_assignment('deltaw').rhs}};
+    double {{on_event.state_assignment('deltaw').lhs}} = {{component_class.parameter('wmax').name}}*{{component_class.state_variable('P').name}};
     {{on_event.state_assignment('wsyn').lhs}} = {{on_event.state_assignment('wsyn').rhs}};
 
     {% for on_cond in regime.on_conditions %}
@@ -187,7 +182,7 @@ private:
   depress_( double {{component_class.state_variable('wsyn').name}}, double {{component_class.state_variable('M').name}} )
   {
     {% set on_event = regime.on_event('presynaptic_spike') %}
-    double {{on_event.state_assignment('deltaw').lhs}} = {{on_event.state_assignment('deltaw').rhs}};
+    double {{on_event.state_assignment('deltaw').lhs}} = {{component_class.parameter('wmax').name}}*{{component_class.state_variable('M').name}};
     {{on_event.state_assignment('wsyn').lhs}} = {{on_event.state_assignment('wsyn').rhs}};
 
     {% for on_cond in regime.on_conditions %}
@@ -209,14 +204,10 @@ private:
   {% endfor %}
 };
 
-template < typename targetidentifierT >
-STDPConnection_{{component_name}}< targetidentifierT >::STDPConnection_{{component_name}}()
-  : ConnectionBase()
-  , {{component_class.state_variable('wsyn').name}}( 1.0 )
-  , {{component_class.state_variable('P').name}}( 0.0 )
-  , {{component_class.state_variable('tlast_pre').name}}( 0.0 )
-{
-}
+
+//
+// Implementation of class STDPConnection_{{component_name}}.
+//
 
 template < typename targetidentifierT >
 STDPConnection_{{component_name}}< targetidentifierT >::STDPConnection_{{component_name}}( const STDPConnection_{{component_name}}< targetidentifierT >& rhs )
@@ -235,11 +226,18 @@ void
 STDPConnection_{{component_name}}< targetidentifierT >::get_status( DictionaryDatum& d ) const
 {
   ConnectionBase::get_status( d );
-  def< double >( d, names::{{component_class.state_variable('wsyn').name}}, {{component_class.state_variable('wsyn').name}} );
-  {% for par in component_class.parameters %}
-  def< double >( d, names::{{par.name}}, {{par.name}} );
-  {% endfor %}
+
+  def< double >( d, names::tau_plus, {{component_class.parameter('tauLTP').name}} );
+  def< double >( d, names::A_LTP, {{component_class.parameter('aLTP').name}});
+  def< double >( d, names::tau_minus, {{component_class.parameter('tauLTD').name}});
+  def< double >( d, names::A_LTD, {{component_class.parameter('aLTD').name}});
+  def< double >( d, names::Wmax, {{component_class.parameter('wmax').name}});
+  def< double >( d, names::Wmin, {{component_class.parameter('wmin').name}});
+
+  def< double >( d, names::weight, {{component_class.state_variable('wsyn').name}} );
+  def< double >( d, names::Kplus, {{component_class.state_variable('P').name}});
   def< long >( d, names::size_of, sizeof( *this ) );
+
 }
 
 template < typename targetidentifierT >
@@ -247,20 +245,19 @@ void
 STDPConnection_{{component_name}}< targetidentifierT >::set_status( const DictionaryDatum& d, ConnectorModel& cm )
 {
   ConnectionBase::set_status( d, cm );
-  updateValue< double >( d, names::{{component_class.state_variable('wsyn').name}}, {{component_class.state_variable('wsyn').name}} );
-  {% for par in component_class.parameters %}
-  updateValue< double >( d, names::{{par.name}}, {{par.name}} );
-  {% endfor %}
+
+  updateValue< double >( d, names::tau_plus, {{component_class.parameter('tauLTP').name}} );
+  updateValue< double >( d, names::A_LTP, {{component_class.parameter('aLTP').name}});
+  updateValue< double >( d, names::tau_minus, {{component_class.parameter('tauLTD').name}});
+  updateValue< double >( d, names::A_LTD, {{component_class.parameter('aLTD').name}});
+  updateValue< double >( d, names::Wmax, {{component_class.parameter('wmax').name}});
+  updateValue< double >( d, names::Wmin, {{component_class.parameter('wmin').name}});
+
+  updateValue< double >( d, names::weight, {{component_class.state_variable('wsyn').name}} );
+  updateValue< double >( d, names::Kplus, {{component_class.state_variable('P').name}});
 
   // check if weight_ and Wmax_ has the same sign
-  if ( not( ( ( {{component_class.state_variable('wsyn').name}} >= 0 )
-            - ( {{component_class.state_variable('wsyn').name}} <  0 )
-            )
-         == ( ( {{component_class.parameter('wmax').name}} >= 0 )
-            - ( {{component_class.parameter('wmax').name}} <  0 )
-            )
-          )
-      )
+  if ( not( ( ( {{component_class.state_variable('wsyn').name}} >= 0 ) - ( {{component_class.state_variable('wsyn').name}} <  0 )) == ( ( {{component_class.parameter('wmax').name}} >= 0 ) - ( {{component_class.parameter('wmax').name}} <  0 ) ) ) )
   {
     throw BadProperty( "Weight and Wmax must have same sign." );
   }
@@ -327,13 +324,13 @@ STDPConnection_{{component_name}}< targetidentifierT >::send( Event& e, thread t
 
   // use accessor functions (inherited from Connection< >) to obtain delay in
   // steps and rport
-  e.set_delay( get_delay_steps() );
+  e.set_delay_steps( get_delay_steps() );
   e.set_rport( get_rport() );
   e();
 
   {# Kplus_ = Kplus_ * std::exp( ( t_lastspike_ - t_spike ) / tau_plus_ ) + 1.0; #}
   {% set on_event = component_class.regime('sole').on_event('presynaptic_spike') %}
-  {{on_event.state_assignment('P').lhs}} = {{on_event.state_assignment('P').rhs}};
+  {{on_event.state_assignment('P').lhs}} = {{component_class.state_variable('P').name}} * std::exp( ({{component_class.state_variable('tlast_pre').name}} - t_spike) / {{component_class.parameter('tauLTP').name}} ) + {{component_class.parameter('aLTP').name}};
 
   {# t_lastspike_ = t_spike; #}
   {{component_class.state_variable('tlast_pre').name}} = t_spike;
