@@ -36,26 +36,3 @@
 
 // Includes from sli:
 #include "dictdatum.h"
-
-namespace nest
-{
-//
-// Initialization of class STDPConnection_{{component_name}}.
-//
-
-template < typename targetidentifierT >
-STDPConnection_{{component_name}}< targetidentifierT >::STDPConnection_{{component_name}}()
-  : ConnectionBase()
-  , {{component_class.parameter('tauLTP').name}}( 20.0 )
-  , {{component_class.parameter('aLTP').name}}( 0.01 )
-  , {{component_class.parameter('tauLTD').name}}( 20.0 )
-  , {{component_class.parameter('aLTD').name}}( 0.012 )
-  , {{component_class.parameter('wmin').name}}( 0.0 )
-  , {{component_class.parameter('wmax').name}}( 0.0000001 )
-  , {{component_class.state_variable('wsyn').name}}( 0.00000005 )
-  , {{component_class.state_variable('P').name}}( 0.0 )
-  , {{component_class.state_variable('tlast_pre').name}}( 0.0 )
-{
-}
-
-}

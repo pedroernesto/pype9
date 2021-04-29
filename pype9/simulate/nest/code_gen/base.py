@@ -112,13 +112,13 @@ class CodeGenerator(BaseCodeGenerator):
                             post_hoc_subs=self._inline_random_implementations)
 
         # Render Loader header file
-        self.render_to_file('module-header.tmpl', tmpl_args,
+        self.render_to_file('module-header_stdp_connection.tmpl', tmpl_args,
                              name + 'module.h', src_dir)
         # Render Loader C++ class
-        self.render_to_file('module-cpp.tmpl', tmpl_args,
+        self.render_to_file('module-cpp_stdp_connection.tmpl', tmpl_args,
                              name + 'module.cpp', src_dir)
         # Render SLI initializer
-        self.render_to_file('module_sli_init.tmpl', tmpl_args,
+        self.render_to_file('module_sli_init_stdp_connection.tmpl', tmpl_args,
                              name + 'module-init.sli',
                              path.join(src_dir, 'sli'))
 
@@ -141,7 +141,7 @@ class CodeGenerator(BaseCodeGenerator):
                                  'CMakeLists.txt', src_dir)
             os.chdir(compile_dir)
             stdout, stderr = self.run_command(
-                ['cmake',
+                ['{}/../../bin/cmake'.format(os.environ['CONDA_PREFIX']),
                  '-Dwith-nest={}'.format(self.nest_config),
                  '-DCMAKE_INSTALL_PREFIX={}'.format(install_dir), src_dir],
                 fail_msg=(

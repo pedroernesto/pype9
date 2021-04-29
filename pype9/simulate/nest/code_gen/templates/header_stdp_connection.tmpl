@@ -151,7 +151,7 @@ public:
 
     ConnectionBase::check_connection_( dummy_target, s, t, receptor_type );
 
-    t.register_stdp_connection( {{component_class.state_variable('tlast_pre').name}} - get_delay(), get_delay() );
+    t.register_stdp_connection( t_lastspike_ - get_delay(), get_delay() );
   }
 
   void
@@ -166,7 +166,7 @@ private:
   facilitate_( double {{component_class.state_variable('wsyn').name}}, double {{component_class.state_variable('P').name}} )
   {
     {% set on_event = regime.on_event('postsynaptic_spike') %}
-    double {{on_event.state_assignment('deltaw').lhs}} = {{component_class.parameter('wmax').name}}*{{component_class.state_variable('P').name}};
+    double {{on_event.state_assignment('deltaw').lhs}} = {{component_class.parameter('wmax').name}}*{{component_class.parameter('aLTP').name}}*{{component_class.state_variable('P').name}};
     {{on_event.state_assignment('wsyn').lhs}} = {{on_event.state_assignment('wsyn').rhs}};
 
     {% for on_cond in regime.on_conditions %}
@@ -182,7 +182,7 @@ private:
   depress_( double {{component_class.state_variable('wsyn').name}}, double {{component_class.state_variable('M').name}} )
   {
     {% set on_event = regime.on_event('presynaptic_spike') %}
-    double {{on_event.state_assignment('deltaw').lhs}} = {{component_class.parameter('wmax').name}}*{{component_class.state_variable('M').name}};
+    double {{on_event.state_assignment('deltaw').lhs}} = -{{component_class.parameter('wmax').name}}*{{component_class.parameter('aLTD').name}}*{{component_class.state_variable('M').name}};
     {{on_event.state_assignment('wsyn').lhs}} = {{on_event.state_assignment('wsyn').rhs}};
 
     {% for on_cond in regime.on_conditions %}
@@ -200,14 +200,36 @@ private:
   {% endfor %}
 
   {% for state_var in component_class.state_variables %}
+    {% if 'tlast_' not in state_var.name %}
   double {{state_var.name}};
+    {% endif %}
   {% endfor %}
+
+  double t_lastspike_;
 };
 
 
 //
 // Implementation of class STDPConnection_{{component_name}}.
 //
+
+//
+// Initialization of class STDPConnection_{{component_name}}.
+//
+template < typename targetidentifierT >
+STDPConnection_{{component_name}}< targetidentifierT >::STDPConnection_{{component_name}}()
+  : ConnectionBase()
+  , {{component_class.parameter('tauLTP').name}}( 20.0 )
+  , {{component_class.parameter('aLTP').name}}( 0.01 )
+  , {{component_class.parameter('tauLTD').name}}( 20.0 )
+  , {{component_class.parameter('aLTD').name}}( 0.012 )
+  , {{component_class.parameter('wmin').name}}( 0.0 )
+  , {{component_class.parameter('wmax').name}}( 0.0000001 )
+  , {{component_class.state_variable('wsyn').name}}( 0.00000005 )
+  , {{component_class.state_variable('P').name}}( 0.0 )
+  , t_lastspike_( 0.0 )
+{
+}
 
 template < typename targetidentifierT >
 STDPConnection_{{component_name}}< targetidentifierT >::STDPConnection_{{component_name}}( const STDPConnection_{{component_name}}< targetidentifierT >& rhs )
@@ -216,8 +238,11 @@ STDPConnection_{{component_name}}< targetidentifierT >::STDPConnection_{{compone
   , {{par.name}}( rhs.{{par.name}} )
   {% endfor %}
   {% for state_var in component_class.state_variables %}
+    {% if 'tlast_' not in state_var.name %}
   , {{state_var.name}}( rhs.{{state_var.name}} )
+    {% endif %}
   {% endfor %}
+  , t_lastspike_( rhs.t_lastspike_ )
 {
 }
 
@@ -228,9 +253,9 @@ STDPConnection_{{component_name}}< targetidentifierT >::get_status( DictionaryDa
   ConnectionBase::get_status( d );
 
   def< double >( d, names::tau_plus, {{component_class.parameter('tauLTP').name}} );
-  def< double >( d, names::A_LTP, {{component_class.parameter('aLTP').name}});
+  def< double >( d, names::A_plus, {{component_class.parameter('aLTP').name}});
   def< double >( d, names::tau_minus, {{component_class.parameter('tauLTD').name}});
-  def< double >( d, names::A_LTD, {{component_class.parameter('aLTD').name}});
+  def< double >( d, names::A_minus, {{component_class.parameter('aLTD').name}});
   def< double >( d, names::Wmax, {{component_class.parameter('wmax').name}});
   def< double >( d, names::Wmin, {{component_class.parameter('wmin').name}});
 
@@ -247,9 +272,9 @@ STDPConnection_{{component_name}}< targetidentifierT >::set_status( const Dictio
   ConnectionBase::set_status( d, cm );
 
   updateValue< double >( d, names::tau_plus, {{component_class.parameter('tauLTP').name}} );
-  updateValue< double >( d, names::A_LTP, {{component_class.parameter('aLTP').name}});
+  updateValue< double >( d, names::A_plus, {{component_class.parameter('aLTP').name}});
   updateValue< double >( d, names::tau_minus, {{component_class.parameter('tauLTD').name}});
-  updateValue< double >( d, names::A_LTD, {{component_class.parameter('aLTD').name}});
+  updateValue< double >( d, names::A_minus, {{component_class.parameter('aLTD').name}});
   updateValue< double >( d, names::Wmax, {{component_class.parameter('wmax').name}});
   updateValue< double >( d, names::Wmin, {{component_class.parameter('wmin').name}});
 
@@ -293,35 +318,24 @@ STDPConnection_{{component_name}}< targetidentifierT >::send( Event& e, thread t
   // history[0, ..., t_last_spike - dendritic_delay] have been
   // incremented by Archiving_Node::register_stdp_connection(). See bug #218 for
   // details.
-  {#
   target->get_history( t_lastspike_ - dendritic_delay, t_spike - dendritic_delay, &start, &finish );
-  #}
-  target->get_history( {{component_class.state_variable('tlast_pre').name}} - dendritic_delay, t_spike - dendritic_delay, &start, &finish );
-
   // facilitation due to post-synaptic spikes since last pre-synaptic spike
   double minus_dt;
   while ( start != finish )
   {
-   {# minus_dt = t_lastspike_ - ( start->t_ + dendritic_delay ); #}
-   minus_dt = - ( start->t_ - ({{component_class.state_variable('tlast_pre').name}} - dendritic_delay) );
-
+   minus_dt = t_lastspike_ - ( start->t_ + dendritic_delay );
    ++start;
    // get_history() should make sure that
    // start->t_ > t_lastspike - dendritic_delay, i.e. minus_dt < 0
    assert( minus_dt < -1.0 * kernel().connection_manager.get_stdp_eps() );
-   {# wsyn_ = facilitate_( wsyn_, Kplus_ * std::exp( minus_dt / tau_plus_ ) ); #}
    {{component_class.state_variable('wsyn').name}} = facilitate_( {{component_class.state_variable('wsyn').name}}, {{component_class.state_variable('P').name}} * std::exp( minus_dt / {{component_class.parameter('tauLTP').name}} ) );
   }
 
   // depression due to new pre-synaptic spike
-  {#
-  wsyn_ = depress_( wsyn_, target->get_K_value( t_spike - dendritic_delay ) );
-  #}
   {{component_class.state_variable('wsyn').name}} = depress_( {{component_class.state_variable('wsyn').name}}, target->get_K_value( t_spike - dendritic_delay ) );
 
   e.set_receiver( *target );
   e.set_weight( {{component_class.state_variable('wsyn').name}} );
-
   // use accessor functions (inherited from Connection< >) to obtain delay in
   // steps and rport
   e.set_delay_steps( get_delay_steps() );
@@ -330,10 +344,9 @@ STDPConnection_{{component_name}}< targetidentifierT >::send( Event& e, thread t
 
   {# Kplus_ = Kplus_ * std::exp( ( t_lastspike_ - t_spike ) / tau_plus_ ) + 1.0; #}
   {% set on_event = component_class.regime('sole').on_event('presynaptic_spike') %}
-  {{on_event.state_assignment('P').lhs}} = {{component_class.state_variable('P').name}} * std::exp( ({{component_class.state_variable('tlast_pre').name}} - t_spike) / {{component_class.parameter('tauLTP').name}} ) + {{component_class.parameter('aLTP').name}};
+  {{on_event.state_assignment('P').lhs}} = {{component_class.state_variable('P').name}} * std::exp( ( t_lastspike_ - t_spike) / {{component_class.parameter('tauLTP').name}} ) + 1.0;
 
-  {# t_lastspike_ = t_spike; #}
-  {{component_class.state_variable('tlast_pre').name}} = t_spike;
+  t_lastspike_ = t_spike;
 }
 
 } // of namespace nest
